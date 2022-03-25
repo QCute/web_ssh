@@ -1,0 +1,26 @@
+#!/usr/bin/env escript
+%%! -noshell -noinput
+%% -*- mode: erlang;erlang-indent-level: 4;indent-tabs-mode: nil -*-
+%% ex: ft=erlang ts=4 sw=4 et
+-export([main/1]).
+
+main(_) ->
+    Filename = "web_ssh",
+    filelib:ensure_dir("ebin/"),
+    compile:file("src/web_ssh.erl", [{outdir, "ebin/"}, native, {hipe, o3}, verbose,report_errors,report_warnings]),
+    {ok, Binary} = file:read_file("ebin/web_ssh.beam"),
+    {ok, {web_ssh, Stripped}} = beam_lib:strip(Binary),
+    case zip:create("mem", [{"web_ssh.beam", Stripped}], [memory]) of
+        {ok, {"mem", ZipBin}} ->
+            Shebang = "#!/usr/bin/env escript\n",
+            Args = "%%! -noshell -noinput -name web_ssh@127.0.0.1 -setcookie web_ssh\n",
+            Script = iolist_to_binary([Shebang, Args, ZipBin]),
+            case file:write_file(Filename, Script) of
+                ok ->
+                    ok;
+                {error, WriteError} ->
+                    io:format("Failed to write escript: ~p\n", [WriteError])
+            end;
+        {error, ZipError} ->
+            io:format("Failed to zip: ~p\n", [ZipError])
+    end.
